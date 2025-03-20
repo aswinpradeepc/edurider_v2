@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'allauth.socialaccount.providers.google',
     'rest_framework_simplejwt',
     'corsheaders',
+    'rest_framework_simplejwt.token_blacklist',
     
     # Custom apps
     'students',
@@ -60,7 +61,7 @@ INSTALLED_APPS = [
     'drivers',
     'authapp', 
     'attendance',
-    'rest_framework_simplejwt.token_blacklist',
+    'core',
 ]
 
 MIDDLEWARE = [

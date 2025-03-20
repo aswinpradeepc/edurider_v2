@@ -120,7 +120,7 @@ Both trigger standard Google OAuth authentication.
 | Endpoint                   | Method | Description                              |
 |----------------------------|--------|------------------------------------------|
 | `/students/<student_id>`    | GET    | Get student details                      |
-| `/students/presence/`       | POST   | Mark presence/absence (by driver/admin)  |
+| `/students/presence/`       | POST   | Mark presence/absence (by guardian/student app only)  |
 
 ---
 

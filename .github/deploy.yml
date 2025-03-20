@@ -1,0 +1,39 @@
+name: Deploy to Azure VM
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Deploy to Azure VM
+      env:
+        AZURE_VM_IP: ${{ secrets.AZURE_VM_IP }}
+        AZURE_VM_USERNAME: ${{ secrets.AZURE_VM_USERNAME }}
+        AZURE_VM_SSH_KEY: ${{ secrets.AZURE_VM_SSH_KEY }}
+      run: |
+        echo "${{ secrets.AZURE_VM_SSH_KEY }}" | tr -d '\r' > azure_vm_key.pem
+        chmod 600 azure_vm_key.pem
+        
+        # Add VM to known hosts (optional, better security)
+        ssh-keyscan -H ${{ secrets.AZURE_VM_IP }} >> ~/.ssh/known_hosts
+        
+        ssh -i azure_vm_key.pem ${{ secrets.AZURE_VM_USERNAME }}@${{ secrets.AZURE_VM_IP }} << 'EOF'
+          set -e  # Exit on error
+          
+          cd edurider_v2
+          git pull origin main
+          
+          sudo docker compose down
+          sudo docker compose up -d --build
+          
+          # Run migration after containers up
+          sudo docker compose exec web python3 manage.py migrate
+        EOF

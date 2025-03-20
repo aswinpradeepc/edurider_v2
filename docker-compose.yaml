@@ -1,5 +1,6 @@
 services:
   web:
+    container_name: web_container
     build: .
     command: >
       bash -c "python manage.py migrate &&

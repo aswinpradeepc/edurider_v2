@@ -13,19 +13,18 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: Deploy to Azure VM
+    - name: Deploy to Azure VM via SSH (skip known_hosts check)
       env:
         AZURE_VM_IP: ${{ secrets.AZURE_VM_IP }}
         AZURE_VM_USERNAME: ${{ secrets.AZURE_VM_USERNAME }}
         AZURE_VM_SSH_KEY: ${{ secrets.AZURE_VM_SSH_KEY }}
       run: |
-        echo "${{ secrets.AZURE_VM_SSH_KEY }}" | tr -d '\r' > azure_vm_key.pem
+        # Write the PEM key to a file
+        echo "${{ secrets.AZURE_VM_SSH_KEY }}" > azure_vm_key.pem
         chmod 600 azure_vm_key.pem
         
-        # Add VM to known hosts (optional, better security)
-        ssh-keyscan -H ${{ secrets.AZURE_VM_IP }} >> ~/.ssh/known_hosts
-        
-        ssh -i azure_vm_key.pem ${{ secrets.AZURE_VM_USERNAME }}@${{ secrets.AZURE_VM_IP }} << 'EOF'
+        # SSH into VM, skip host key check like AWS EC2
+        ssh -o StrictHostKeyChecking=no -i azure_vm_key.pem ${{ secrets.AZURE_VM_USERNAME }}@${{ secrets.AZURE_VM_IP }} << 'EOF'
           set -e  # Exit on error
           
           cd edurider_v2

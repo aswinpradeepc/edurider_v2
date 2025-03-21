@@ -182,8 +182,6 @@ Both trigger standard Google OAuth authentication.
 
 ---
 
----
-
 ## 📋 **TODO LIST (Order of Implementation):**
 
 ### **Phase 1 (Core Models & Auth)**

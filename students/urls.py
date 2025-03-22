@@ -4,4 +4,5 @@ from . import views
 urlpatterns = [
     path('<uuid:student_id>/', views.StudentDetailView.as_view(), name='student-detail'),
     path('<uuid:student_id>/location/', views.StudentLocationUpdateView.as_view(), name='student-location'),
+    path('<uuid:student_id>/location/coordinates/', views.StudentLocationCoordinatesUpdateView.as_view(), name='student-location-coordinates'),
 ]

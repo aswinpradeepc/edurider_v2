@@ -42,3 +42,10 @@ class StudentSerializer(serializers.ModelSerializer):
                 'latitude': obj.coordinates.y
             }
         return None
+
+class StudentLocationCoordinatesSerializer(serializers.Serializer):
+    """
+    Serializer for updating student location using latitude and longitude
+    """
+    latitude = serializers.FloatField()
+    longitude = serializers.FloatField()

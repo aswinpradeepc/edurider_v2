@@ -5,7 +5,7 @@ from django.utils import timezone
 
 class Trip(models.Model):
     """
-    Trip model to store information about bus routes, including optimization data,
+    Trip model to store information about trips, including optimization data,
     driver assignments, and student lists.
     """
     # Primary key
@@ -85,8 +85,7 @@ class Trip(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
-        direction = "To School" if self.to_school else "From School"
-        return f"Trip on {self.trip_date} - {direction} - {self.get_status_display()}"
+        return f"{self.driver.name}" if self.driver else ""
     
     class Meta:
         ordering = ['-trip_date', 'start_time']
@@ -97,30 +96,5 @@ class Trip(models.Model):
             models.Index(fields=['status']),
             models.Index(fields=['to_school']),
         ]
-    
-    @property
-    def is_active(self):
-        """Check if trip is currently active based on date and status"""
-        return (self.trip_date == timezone.now().date() and 
-                self.status == 'active')
-    
-    @property
-    def is_upcoming(self):
-        """Check if trip is upcoming (today but not yet active)"""
-        return (self.trip_date == timezone.now().date() and 
-                self.status == 'pending')
-    
-    def activate_trip(self):
-        """Mark this trip as active"""
-        self.status = 'active'
-        self.save(update_fields=['status', 'updated_at'])
-    
-    def complete_trip(self):
-        """Mark this trip as completed"""
-        self.status = 'completed'
-        self.save(update_fields=['status', 'updated_at'])
-    
-    def cancel_trip(self):
-        """Mark this trip as cancelled"""
-        self.status = 'cancelled'
-        self.save(update_fields=['status', 'updated_at'])
+        # Ensure unique combination of date, direction and driver
+        unique_together = ['trip_date', 'to_school', 'driver']

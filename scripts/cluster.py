@@ -21,7 +21,7 @@ from drivers.models import Driver
 from attendance.models import Attendance
 from django.utils import timezone
 
-MAX_STUDENTS_PER_TRIP = 25
+MAX_STUDENTS_PER_TRIP = 40
 
 def get_student_coordinates(students):
     """
@@ -48,7 +48,7 @@ def optimize_routes(date, direction='to_school'):
     """
     Optimize routes for a specific date using K-means clustering.
     Only includes students who are marked present for that date.
-    Creates trips with exactly 25 students each (except possibly the last trip).
+    Creates trips with exactly 40 students each (except possibly the last trip).
     
     Args:
         date (datetime.date): Date to optimize routes for
@@ -71,7 +71,7 @@ def optimize_routes(date, direction='to_school'):
         
         logging.info(f"Found {total_students} students marked present")
         
-        # Calculate optimal number of clusters based on exact 25 students per trip
+        # Calculate optimal number of clusters based on exact 40 students per trip
         num_clusters = (total_students + MAX_STUDENTS_PER_TRIP - 1) // MAX_STUDENTS_PER_TRIP
         logging.info(f"Creating {num_clusters} optimized routes")
         
@@ -99,7 +99,7 @@ def optimize_routes(date, direction='to_school'):
             student = coord_to_student[coord]
             clusters[label].append(student)
         
-        # Balance clusters to have exactly 25 students (except possibly the last one)
+        # Balance clusters to have exactly 40 students (except possibly the last one)
         all_students = []
         for students in clusters.values():
             all_students.extend(students)

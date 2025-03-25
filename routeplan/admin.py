@@ -10,6 +10,7 @@ import subprocess
 import calendar
 from .models import Trip
 import json
+import os
 from config.settings import BASE_DIR
 
 @admin.register(Trip)
@@ -160,30 +161,240 @@ class TripAdmin(admin.ModelAdmin):
     mark_as_cancelled.short_description = "Mark selected trips as cancelled"
     
     def map(self, obj):
-        """Render a map with all students' locations marked"""
-        students = obj.student_list.all()
-        student_locations = [
-            {'name': student.name, 'latitude': student.coordinates.y, 'longitude': student.coordinates.x}
-            for student in students if student.coordinates
-        ]
+        """Render a map with the route and student locations marked"""
+        from django.conf import settings
+        
+        SCHOOL_COORDINATES = [76.328898, 10.0482921]  # [longitude, latitude]
+        MAPBOX_TOKEN = settings.MAPBOX_TOKEN
+        
+        if not MAPBOX_TOKEN:
+            return mark_safe(f'<div class="error">Error: Mapbox token not configured. Current value: {MAPBOX_TOKEN}</div>')
+        
+        # Get route order from the trip
+        route_data = obj.route_order or {}
+        stops = route_data.get('stops', [])
+        total_distance = route_data.get('total_distance', 0)
+        estimated_duration = route_data.get('estimated_duration', 0)
+        
+        # Create a list of coordinates for the route
+        route_coordinates = []
+        markers_data = []
+        
+        # Add school as starting point
+        route_coordinates.append([SCHOOL_COORDINATES[1], SCHOOL_COORDINATES[0]])  # [lat, lng] for Leaflet
+        markers_data.append({
+            'coordinates': [SCHOOL_COORDINATES[1], SCHOOL_COORDINATES[0]],
+            'name': 'School (Start)',
+            'type': 'school',
+            'icon': '🏫'
+        })
+        
+        # Add student stops in route order
+        for stop in stops:
+            if stop['type'] == 'student':
+                route_coordinates.append([stop['coordinates'][1], stop['coordinates'][0]])
+                markers_data.append({
+                    'coordinates': [stop['coordinates'][1], stop['coordinates'][0]],
+                    'name': stop['student_name'],
+                    'type': 'student',
+                    'icon': '👤'
+                })
+        
+        # Add school as ending point
+        route_coordinates.append([SCHOOL_COORDINATES[1], SCHOOL_COORDINATES[0]])
+        markers_data.append({
+            'coordinates': [SCHOOL_COORDINATES[1], SCHOOL_COORDINATES[0]],
+            'name': 'School (End)',
+            'type': 'school',
+            'icon': '🏫'
+        })
+        
         return mark_safe(f"""
-            <div id="map" style="height: 500px;"></div>
+            <div class="route-map-container">
+                <div id="map" style="height: 500px;"></div>
+                <div class="route-info" style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px;">
+                    <strong>Total Distance:</strong> {total_distance:.2f} km
+                    <strong style="margin-left: 20px;">Estimated Duration:</strong> {estimated_duration/60:.0f} minutes
+                </div>
+            </div>
             <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+            <script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js"></script>
+            <script src='https://api.mapbox.com/mapbox.js/v3.3.1/mapbox.js'></script>
+            <link href='https://api.mapbox.com/mapbox.js/v3.3.1/mapbox.css' rel='stylesheet' />
             <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+            <style>
+                .route-map-container {{
+                    margin-bottom: 20px;
+                }}
+                .custom-div-icon {{
+                    background: transparent;
+                    border: none;
+                }}
+                .marker-pin {{
+                    width: 30px;
+                    height: 30px;
+                    border-radius: 50% 50% 50% 0;
+                    position: absolute;
+                    transform: rotate(-45deg);
+                    left: 50%;
+                    top: 50%;
+                    margin: -15px 0 0 -15px;
+                }}
+                .marker-text {{
+                    transform: rotate(45deg);
+                    color: white;
+                    font-weight: bold;
+                    width: 100%;
+                    text-align: center;
+                }}
+                .route-info {{
+                    font-size: 14px;
+                    color: #333;
+                }}
+            </style>
             <script>
                 document.addEventListener('DOMContentLoaded', function() {{
-                    var map = L.map('map').setView([0, 0], 2);
-                    L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
-                      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    }}).addTo(map);
+                    var markers = {json.dumps(markers_data)};
+                    var routeCoordinates = {json.dumps(route_coordinates)};
+                    var mapboxToken = '{MAPBOX_TOKEN}';
                     
-                    var students = {json.dumps(student_locations)};
-                    console.log('Student locations:', students);
-                    students.forEach(function(student) {{
-                      var marker = L.marker([student.latitude, student.longitude]).addTo(map);
-                      marker.bindPopup(`<b>${{student.name}}</b>`);
-                    }});
+                    if (!mapboxToken) {{
+                        console.error('Mapbox token not configured');
+                        document.getElementById('map').innerHTML = '<div class="error" style="padding: 20px;">Error: Mapbox token not configured</div>';
+                        return;
+                    }}
+                    
+                    try {{
+                        // Initialize map centered on school
+                        L.mapbox.accessToken = mapboxToken;
+                        var map = L.mapbox.map('map', null, {{
+                            center: [{SCHOOL_COORDINATES[1]}, {SCHOOL_COORDINATES[0]}],
+                            zoom: 13
+                        }});
+                        
+                        // Add the streets layer
+                        L.mapbox.styleLayer('mapbox://styles/mapbox/streets-v11').addTo(map);
+                        
+                        // Function to get directions between two points
+                        async function getDirections(start, end) {{
+                            try {{
+                                const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${{start[1]}},${{start[0]}};${{end[1]}},${{end[0]}}?geometries=geojson&access_token=${{mapboxToken}}`;
+                                const response = await fetch(url, {{
+                                    method: 'GET',
+                                    headers: {{
+                                        'Accept': 'application/json'
+                                    }},
+                                    mode: 'cors'
+                                }});
+                                
+                                if (!response.ok) {{
+                                    throw new Error(`HTTP error! status: ${{response.status}}`);
+                                }}
+                                
+                                const data = await response.json();
+                                if (!data.routes || !data.routes[0]) {{
+                                    throw new Error('No route found');
+                                }}
+                                return data.routes[0].geometry.coordinates;
+                            }} catch (error) {{
+                                console.error('Error fetching directions:', error);
+                                // Fallback to straight line if directions fail
+                                return [[start[1], start[0]], [end[1], end[0]]];
+                            }}
+                        }}
+                        
+                        // Function to draw route between all points
+                        async function drawCompleteRoute() {{
+                            let allCoords = [];
+                            
+                            // Get directions for each segment
+                            for (let i = 0; i < markers.length - 1; i++) {{
+                                const start = markers[i].coordinates;
+                                const end = markers[i + 1].coordinates;
+                                
+                                try {{
+                                    const segmentCoords = await getDirections(start, end);
+                                    // Convert from [lng, lat] to [lat, lng] for Leaflet
+                                    const converted = segmentCoords.map(function(coord) {{
+                                        return [coord[1], coord[0]];
+                                    }});
+                                    // Add each coordinate to the array
+                                    for (let j = 0; j < converted.length; j++) {{
+                                        allCoords.push(converted[j]);
+                                    }}
+                                }} catch (error) {{
+                                    console.error('Error getting directions:', error);
+                                    // Fallback to straight line
+                                    allCoords.push([start[0], start[1]]);
+                                    allCoords.push([end[0], end[1]]);
+                                }}
+                            }}
+                            
+                            // Draw the complete route
+                            if (allCoords.length > 0) {{
+                                var routeLine = L.polyline(allCoords, {{
+                                    color: '#2980b9',
+                                    weight: 4,
+                                    opacity: 0.8
+                                }}).addTo(map);
+
+                                // Add arrow decorations
+                                L.polylineDecorator(routeLine, {{
+                                    patterns: [
+                                        {{
+                                            offset: 25,
+                                            repeat: 100,
+                                            symbol: L.Symbol.arrowHead({{
+                                                pixelSize: 15,
+                                                polygon: false,
+                                                pathOptions: {{
+                                                    stroke: true,
+                                                    color: '#2980b9',
+                                                    weight: 3
+                                                }}
+                                            }})
+                                        }}
+                                    ]
+                                }}).addTo(map);
+
+                                // Fit map bounds to show all markers
+                                map.fitBounds(routeLine.getBounds(), {{padding: [50, 50]}});
+                            }}
+                        }}
+                        
+                        // Add markers with custom icons
+                        markers.forEach(function(marker, index) {{
+                            var markerColor = marker.type === 'school' ? '#e74c3c' : '#3498db';
+                            var icon = L.divIcon({{
+                                className: 'custom-div-icon',
+                                html: `
+                                    <div class="marker-pin" style="background: ${{markerColor}};">
+                                        <div class="marker-text">${{index + 1}}</div>
+                                    </div>
+                                `,
+                                iconSize: [30, 30],
+                                iconAnchor: [15, 30]
+                            }});
+                            
+                            var popupContent = `
+                                <div style="text-align: center;">
+                                    <span style="font-size: 20px;">${{marker.icon}}</span><br>
+                                    <strong>${{marker.name}}</strong><br>
+                                    Stop #${{index + 1}}
+                                </div>
+                            `;
+                            
+                            L.marker(marker.coordinates, {{icon: icon}})
+                             .bindPopup(popupContent)
+                             .addTo(map);
+                        }});
+                        
+                        drawCompleteRoute();
+                    }} catch (error) {{
+                        console.error('Error initializing map:', error);
+                        document.getElementById('map').innerHTML = '<div class="error" style="padding: 20px;">Error initializing map: ' + error.message + '</div>';
+                    }}
                 }});
             </script>
         """)
-    map.short_description = "Student Locations Map"
+    map.short_description = "Route Map"

@@ -18,7 +18,7 @@ django.setup()
 from routeplan.models import Trip
 from students.models import Student
 
-MAPBOX_TOKEN = "pk.eyJ1IjoiYXN3aW5wcmFkZWVwYyIsImEiOiJjbTVrcnUxZWQwdTdyMzBxdzI1cXJ4bWg3In0.wX04lCDO2uZGNNmWuN_TQA"
+MAPBOX_TOKEN = os.environ.get('MAPBOX_TOKEN')
 BASE_URL = "https://api.mapbox.com/optimized-trips/v2"
 SCHOOL_COORDINATES = [76.328898, 10.0482921]  # [longitude, latitude]
 

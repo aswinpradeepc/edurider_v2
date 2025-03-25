@@ -48,7 +48,7 @@ def optimize_routes(date, direction='to_school'):
     """
     Optimize routes for a specific date using K-means clustering.
     Only includes students who are marked present for that date.
-    Creates clusters with maximum size of 40 students.
+    Creates trips with exactly 40 students each (except possibly the last trip).
     
     Args:
         date (datetime.date): Date to optimize routes for
@@ -71,8 +71,8 @@ def optimize_routes(date, direction='to_school'):
         
         logging.info(f"Found {total_students} students marked present")
         
-        # Calculate optimal number of clusters
-        num_clusters = math.ceil(total_students / MAX_STUDENTS_PER_TRIP)
+        # Calculate optimal number of clusters based on exact 40 students per trip
+        num_clusters = (total_students + MAX_STUDENTS_PER_TRIP - 1) // MAX_STUDENTS_PER_TRIP
         logging.info(f"Creating {num_clusters} optimized routes")
         
         # Get available drivers
@@ -85,11 +85,11 @@ def optimize_routes(date, direction='to_school'):
         # Get coordinates for clustering
         coords, coord_to_student = get_student_coordinates(present_students)
         
-        # Perform K-means clustering
+        # Perform K-means clustering with more iterations for better balance
         kmeans = KMeans(
             n_clusters=num_clusters,
             random_state=42,
-            n_init=10  # Number of times to run with different centroid seeds
+            n_init=20  # Increased number of initializations for better clustering
         ).fit(coords)
         
         # Group students by cluster
@@ -99,11 +99,24 @@ def optimize_routes(date, direction='to_school'):
             student = coord_to_student[coord]
             clusters[label].append(student)
         
+        # Balance clusters to have exactly 40 students (except possibly the last one)
+        all_students = []
+        for students in clusters.values():
+            all_students.extend(students)
+        
+        balanced_clusters = []
+        for i in range(num_clusters):
+            start_idx = i * MAX_STUDENTS_PER_TRIP
+            end_idx = min(start_idx + MAX_STUDENTS_PER_TRIP, len(all_students))
+            balanced_clusters.append(all_students[start_idx:end_idx])
+            if end_idx >= len(all_students):
+                break
+        
         # Delete existing trips for this date and direction
         Trip.objects.filter(trip_date=date, to_school=direction=='to_school').delete()
         
         # Create new optimized trips
-        for cluster_id, cluster_students in clusters.items():
+        for cluster_id, cluster_students in enumerate(balanced_clusters):
             if not cluster_students:
                 continue
                 

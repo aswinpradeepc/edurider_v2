@@ -5,6 +5,8 @@ from .models import Driver
 from .serializers import DriverSerializer, DriverLocationSerializer
 from rest_framework.response import Response
 from rest_framework import status
+from django.views.generic import TemplateView
+from django.contrib.auth.mixins import LoginRequiredMixin
 
 class DriverDetailView(generics.RetrieveAPIView):
     """
@@ -38,3 +40,12 @@ class DriverLocationUpdateView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+class DriverLocationUpdatePageView(LoginRequiredMixin, TemplateView):
+    template_name = 'drivers/location_update.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        driver_id = self.kwargs.get('driver_id')
+        context['driver'] = Driver.objects.get(driver_id=driver_id)
+        return context

@@ -1,0 +1,84 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<div class="location-update-container">
+    <h2>Driver Location Updates</h2>
+    <div id="status" style="margin: 10px 0; padding: 10px; background: #f0f0f0;">
+        WebSocket Status: <span id="ws-status">Connecting...</span>
+    </div>
+    <div id="location-display" style="margin: 10px 0;">
+        Current Location: <span id="current-location">Not available</span>
+    </div>
+    <div id="map" style="height: 400px; margin: 20px 0;"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+
+<script>
+    // Initialize map
+    var map = L.map('map').setView([10.0482921, 76.328898], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+    }).addTo(map);
+
+    var marker = null;
+    
+    // WebSocket connection
+    const driverId = '{{ driver.driver_id }}';
+    const ws = new WebSocket(
+        `ws://${window.location.host}/ws/driver/${driverId}/`
+    );
+
+    // Update status display
+    const statusDisplay = document.getElementById('ws-status');
+    const locationDisplay = document.getElementById('current-location');
+
+    ws.onopen = function() {
+        statusDisplay.textContent = 'Connected';
+        statusDisplay.style.color = 'green';
+    };
+
+    ws.onclose = function() {
+        statusDisplay.textContent = 'Disconnected';
+        statusDisplay.style.color = 'red';
+    };
+
+    ws.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        
+        if (data.error) {
+            console.error('WebSocket error:', data.error);
+            return;
+        }
+
+        // Update location display
+        locationDisplay.textContent = `Lat: ${data.latitude}, Lng: ${data.longitude}`;
+
+        // Update map marker
+        const latLng = [data.latitude, data.longitude];
+        if (marker) {
+            marker.setLatLng(latLng);
+        } else {
+            marker = L.marker(latLng).addTo(map);
+        }
+        map.setView(latLng);
+    };
+
+    // Function to simulate location updates (for testing)
+    function simulateLocationUpdate() {
+        // Generate random movement (±0.001 degrees)
+        const lat = 10.0482921 + (Math.random() - 0.5) * 0.002;
+        const lng = 76.328898 + (Math.random() - 0.5) * 0.002;
+        
+        ws.send(JSON.stringify({
+            latitude: lat,
+            longitude: lng
+        }));
+    }
+
+    // Simulate updates every 5 seconds (for testing)
+    setInterval(simulateLocationUpdate, 5000);
+</script>
+{% endblock %}
